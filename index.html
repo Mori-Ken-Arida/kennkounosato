@@ -48,7 +48,7 @@
         const TEXT_MODEL = "gemini-2.5-flash-preview-09-2025";
         const TTS_MODEL = "gemini-2.5-flash-preview-tts";
 
-        // 【重要】ここであなたの画像ファイル名を指定しています
+        // 【重要】画像拡張子を .jpeg に変更しました
         const CONTENT = {
             hero: {
                 upperTitle: "Keep moving until the very end",
@@ -60,13 +60,13 @@
             visualSection: {
                 title: "「動」からはじめる",
                 description: "身体の不調は心に影響する。心が止まれば動きも止まる。\nまずは動くことで前向きになり、心も動く。",
-                bgImage: "IMG_9358.jpg" 
+                bgImage: "IMG_9358.jpeg" 
             },
             bento: [
-                { id: 1, size: "large", tag: "空間", title: "明るく、やる気の\nみなぎる場所。", description: "上質な空間で、前向きに運動を楽しむことができます。", image: "IMG_9359.jpg" },
-                { id: 2, size: "small", tag: "活動", title: "充実の設備", description: "専門的な機器を揃え、効果的なリハビリを支えます。", image: "IMG_9362.jpg" },
-                { id: 3, size: "small", tag: "専門性", title: "個別ケアの徹底", description: "一人ひとりに寄り添い、最適なプランをご提案します。", image: "IMG_9364.jpg", dark: true },
-                { id: 4, size: "large", tag: "心身一如", title: "身体が動けば、\n心も満たされる。", description: "身体の動きは心と同期します。心地よく汗を流せば、毎日はもっと豊かになります。", image: "IMG_9353.jpg" }
+                { id: 1, size: "large", tag: "空間", title: "明るく、やる気の\nみなぎる場所。", description: "上質な空間で、前向きに運動を楽しむことができます。", image: "IMG_9359.jpeg" },
+                { id: 2, size: "small", tag: "活動", title: "充実の設備", description: "専門的な機器を揃え、効果的なリハビリを支えます。", image: "IMG_9362.jpeg" },
+                { id: 3, size: "small", tag: "専門性", title: "個別ケアの徹底", description: "一人ひとりに寄り添い、最適なプランをご提案します。", image: "IMG_9364.jpeg", dark: true },
+                { id: 4, size: "large", tag: "心身一如", title: "身体が動けば、\n心も満たされる。", description: "身体の動きは心と同期します。心地よく汗を流せば、毎日はもっと豊かになります。", image: "IMG_9353.jpeg" }
             ]
         };
 
@@ -96,7 +96,7 @@
                         <div className="flex flex-col items-center justify-center w-full h-full bg-gray-200 text-[10px] text-gray-500 p-4">
                             <Icon name="image-off" className="w-4 h-4 mb-1" />
                             <span>NotFound: {src}</span>
-                            <span className="mt-1 opacity-50">GitHub上のファイル名と一致しているか確認してください</span>
+                            <span className="mt-1 opacity-50 text-center">GitHub上のファイル名（大文字小文字含む）と一致しているか確認してください</span>
                         </div>
                     ) : (
                         <img 
