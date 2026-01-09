@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>通所介護施設 健幸の里</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & Babel for Browser -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Zen Kaku Gothic New', sans-serif;
+            background-color: #fbfbfd;
+            color: #1d1d1f;
+        }
+        .reveal-text {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 1s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .reveal-text.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .cubic-bezier {
+            transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        /* スクロールバー非表示（Apple風） */
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- 定数設定 ---
+        const apiKey = ""; // 実行環境から提供されます
+        const TEXT_MODEL = "gemini-2.5-flash-preview-09-2025";
+        const TTS_MODEL = "gemini-2.5-flash-preview-tts";
+
+        const CONTENT = {
+            hero: {
+                upperTitle: "Keep moving until the very end",
+                mainTitle: "通所介護施設\n健幸の里",
+                description: "有田郡内における皆様が最期まで動き続ける。\nそれが私たち健幸の里の到達点です。",
+                cta: "健幸の里について",
+                phone: "0737-52-4323",
+                address: "和歌山県有田郡有田川町水尻127-7"
+            },
+            visualSection: {
+                title: "「動」からはじめる",
+                description: "身体の不調は心に影響する。心が止まれば動きも止まる。\nまずは動くことで前向きになり、心も動く。\nそれが健幸の里のモットーです。",
+                bgImage: "IMG_9358.jpg" 
+            },
+            bento: [
+                { id: 1, size: "large", tag: "空間", title: "明るく、やる気の\nみなぎる場所。", description: "どこでどのように過ごすか。上質な空間で、前向きに運動を楽しむことができます。", image: "IMG_9359.jpg" },
+                { id: 2, size: "small", tag: "活動", title: "充実の設備", description: "専門的な機器を揃え、効果的なリハビリを支えます。", image: "IMG_9362.jpg" },
+                { id: 3, size: "small", tag: "専門性", title: "個別ケアの徹底", description: "一人ひとりに寄り添い、最適なプランをご提案します。", image: "IMG_9364.jpg", dark: true },
+                { id: 4, size: "large", tag: "心身一如", title: "身体が動けば、\n心も満たされる。", description: "身体の動きは心と同期します。心地よく汗を流せば、毎日はもっと豊かになります。", image: "IMG_9353.jpg", cta: "詳しく見る" }
+            ],
+            philosophy: {
+                quote: "「リハビリとは、\nどう動くかではなく、\nどれだけ動くかだ。」",
+                text: "私たちは、単にリハビリを提供するだけではありません。\n皆様が住み慣れた地域で、最期まで自分らしく動き続けられること。\nその「健やかな幸せ」を共に創り上げることが、私たちの使命です。"
+            }
+        };
+
+        // --- ヘルパー ---
+        const fetchWithRetry = async (url, options, retries = 5, backoff = 1000) => {
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return await response.json();
+            } catch (error) {
+                if (retries > 0) {
+                    await new Promise(resolve => setTimeout(resolve, backoff));
+                    return fetchWithRetry(url, options, retries - 1, backoff * 2);
+                }
+                throw error;
+            }
+        };
+
+        const pcmToWav = (pcmData, sampleRate) => {
+            const buffer = new ArrayBuffer(44 + pcmData.length * 2);
+            const view = new DataView(buffer);
+            const writeString = (offset, string) => {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            };
+            writeString(0, 'RIFF');
+            view.setUint32(4, 36 + pcmData.length * 2, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, 1, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            writeString(36, 'data');
+            view.setUint32(40, pcmData.length * 2, true);
+            for (let i = 0; i < pcmData.length; i++) {
+                view.setInt16(44 + i * 2, pcmData[i], true);
+            }
+            return new Blob([buffer], { type: 'audio/wav' });
+        };
+
+        // --- コンポーネント ---
+        const Icon = ({ name, className }) => {
+            return <i data-lucide={name} className={className}></i>;
+        };
+
+        const Reveal = ({ children, delay = "0s", className = "" }) => {
+            const ref = useRef(null);
+            const [visible, setVisible] = useState(false);
+            useEffect(() => {
+                const obs = new IntersectionObserver(([e]) => e.isIntersecting && setVisible(true), { threshold: 0.1 });
+                if (ref.current) obs.observe(ref.current);
+                return () => obs.disconnect();
+            }, []);
+            return (
+                <div ref={ref} style={{ transitionDelay: delay }} className={`reveal-text ${visible ? 'visible' : ''} ${className}`}>
+                    {children}
+                </div>
+            );
+        };
+
+        const AIConsultant = () => {
+            const [isOpen, setIsOpen] = useState(false);
+            const [input, setInput] = useState("");
+            const [loading, setLoading] = useState(false);
+            const [response, setResponse] = useState("");
+            const [isSpeaking, setIsSpeaking] = useState(false);
+            const audioRef = useRef(null);
+
+            const handleAsk = async () => {
+                if (!input.trim() || loading) return;
+                setLoading(true);
+                try {
+                    const result = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/${TEXT_MODEL}:generateContent?key=${apiKey}`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: input }] }],
+                            systemInstruction: { parts: [{ text: "あなたはリハビリ施設『健幸の里』のAIです。優しく、専門的に150文字以内でアドバイスしてください。" }] }
+                        })
+                    });
+                    setResponse(result.candidates?.[0]?.content?.parts?.[0]?.text || "すみません、もう一度お願いします。");
+                } catch (e) { setResponse("エラーが発生しました。"); }
+                finally { setLoading(false); }
+            };
+
+            const handleSpeak = async () => {
+                if (!response || isSpeaking) return;
+                setIsSpeaking(true);
+                try {
+                    const result = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/${TTS_MODEL}:generateContent?key=${apiKey}`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: `優しく話してください: ${response}` }] }],
+                            generationConfig: {
+                                responseModalities: ["AUDIO"],
+                                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } } }
+                            }
+                        })
+                    });
+                    const wav = pcmToWav(new Int16Array(Uint16Array.from(atob(result.candidates[0].content.parts[0].inlineData.data), c => c.charCodeAt(0)).buffer), 24000);
+                    audioRef.current.src = URL.createObjectURL(wav);
+                    audioRef.current.play();
+                    audioRef.current.onended = () => setIsSpeaking(false);
+                } catch (e) { setIsSpeaking(false); }
+            };
+
+            return (
+                <>
+                    <button onClick={() => setIsOpen(true)} className="fixed bottom-8 right-8 z-[60] bg-black text-white p-4 rounded-full shadow-2xl hover:scale-110 transition-transform flex items-center gap-2">
+                        <Icon name="sparkles" className="w-5 h-5 text-yellow-400" />
+                        <span className="text-sm font-medium pr-2">AI相談</span>
+                    </button>
+                    {isOpen && (
+                        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+                            <div className="bg-white w-full max-w-lg rounded-[32px] shadow-2xl overflow-hidden p-6 space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="font-bold text-lg flex items-center gap-2"><Icon name="sparkles" className="text-blue-500 w-5 h-5"/> AIコンシェルジュ</h3>
+                                    <button onClick={() => setIsOpen(false)}><Icon name="x" className="w-6 h-6"/></button>
+                                </div>
+                                <textarea value={input} onChange={e => setInput(e.target.value)} placeholder="例：膝のリハビリについて" className="w-full h-32 p-4 bg-gray-50 rounded-2xl outline-none" />
+                                <button onClick={handleAsk} disabled={loading || !input} className="w-full py-3 bg-black text-white rounded-xl flex justify-center items-center gap-2">
+                                    {loading ? <Icon name="loader-2" className="animate-spin" /> : <Icon name="send" />} 相談する
+                                </button>
+                                {response && (
+                                    <div className="p-4 bg-blue-50 rounded-2xl text-sm space-y-2">
+                                        <p>{response}</p>
+                                        <button onClick={handleSpeak} className="text-blue-600 font-bold flex items-center gap-1">
+                                            <Icon name="volume-2" className={isSpeaking ? "animate-pulse" : ""} /> {isSpeaking ? "再生中" : "音声で聞く"}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                            <audio ref={audioRef} className="hidden" />
+                        </div>
+                    )}
+                </>
+            );
+        };
+
+        const App = () => {
+            const [scrolled, setScrolled] = useState(false);
+            useEffect(() => {
+                window.onscroll = () => setScrolled(window.scrollY > 50);
+                lucide.createIcons(); // 初期アイコン生成
+            }, []);
+
+            useEffect(() => {
+                lucide.createIcons(); // DOM更新時にアイコンを再生成
+            });
+
+            return (
+                <div className="min-h-screen">
+                    <AIConsultant />
+                    <nav className={`fixed top-0 w-full z-50 transition-all ${scrolled ? 'bg-white/80 backdrop-blur-md py-3 shadow-sm' : 'bg-transparent py-5'}`}>
+                        <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
+                            <h1 className="text-xl font-bold">健幸の里</h1>
+                            <div className="hidden md:flex space-x-8 text-xs font-bold text-gray-500 uppercase">
+                                <span>理念</span><span>施設案内</span><span>お問い合わせ</span>
+                            </div>
+                            <a href={`tel:${CONTENT.hero.phone}`} className="bg-black text-white text-xs px-5 py-2 rounded-full flex items-center gap-2">
+                                <Icon name="phone" className="w-3 h-3" /> 見学予約
+                            </a>
+                        </div>
+                    </nav>
+
+                    <header className="h-screen flex flex-col justify-center items-center text-center relative overflow-hidden px-4">
+                        <div className="absolute inset-0 bg-gradient-to-tr from-green-50 to-blue-50 opacity-60 blur-3xl -z-10"></div>
+                        <Reveal delay="0.1s" className="text-sm tracking-[0.3em] text-gray-400 uppercase mb-6">{CONTENT.hero.upperTitle}</Reveal>
+                        <Reveal delay="0.3s"><h2 className="text-6xl md:text-[90px] font-bold tracking-tighter leading-tight mb-8 whitespace-pre-line">{CONTENT.hero.mainTitle}</h2></Reveal>
+                        <Reveal delay="0.5s" className="text-lg md:text-2xl text-gray-500 font-light max-w-2xl mb-12">{CONTENT.hero.description}</Reveal>
+                        <Reveal delay="0.7s">
+                            <a href={`tel:${CONTENT.hero.phone}`} className="bg-black text-white px-8 py-4 rounded-full text-lg flex items-center gap-3 hover:scale-105 transition-transform">
+                                <Icon name="phone" className="w-5 h-5" /> 見学予約 {CONTENT.hero.phone}
+                            </a>
+                        </Reveal>
+                    </header>
+
+                    <section className="h-[90vh] bg-black relative flex items-center justify-center overflow-hidden">
+                        <img src={CONTENT.visualSection.bgImage} className="absolute inset-0 w-full h-full object-cover opacity-60" />
+                        <div className="relative z-10 text-white text-center">
+                            <Reveal className="text-4xl md:text-7xl font-bold mb-6">{CONTENT.visualSection.title}</Reveal>
+                            <Reveal delay="0.2s" className="text-gray-300 text-lg md:text-2xl max-w-xl mx-auto">{CONTENT.visualSection.description}</Reveal>
+                        </div>
+                    </section>
+
+                    <section className="py-40 max-w-7xl mx-auto px-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                            {CONTENT.bento.map((b, idx) => (
+                                <Reveal key={b.id} delay={`${idx*0.1}s`} className={`${b.size==='large'?'md:col-span-2':''} ${b.dark?'bg-black text-white':'bg-[#f5f5f7]'} rounded-[40px] p-10 min-h-[400px] relative overflow-hidden group`}>
+                                    <div className="relative z-10">
+                                        <span className="text-xs font-bold uppercase tracking-widest text-gray-400">{b.tag}</span>
+                                        <h3 className="text-3xl font-bold mt-4 whitespace-pre-line">{b.title}</h3>
+                                        <p className="mt-4 text-gray-500 max-w-xs">{b.description}</p>
+                                    </div>
+                                    <img src={b.image} className="absolute inset-0 w-full h-full object-cover opacity-20 group-hover:opacity-40 transition-opacity" />
+                                </Reveal>
+                            ))}
+                        </div>
+                    </section>
+
+                    <footer className="py-20 bg-white border-t text-center">
+                        <p className="text-2xl font-bold mb-6">健幸の里</p>
+                        <p className="text-sm text-gray-400 mb-2 flex items-center justify-center gap-2"><Icon name="map-pin" className="w-4 h-4"/> {CONTENT.hero.address}</p>
+                        <p className="text-sm text-gray-400 mb-8 flex items-center justify-center gap-2"><Icon name="phone" className="w-4 h-4"/> {CONTENT.hero.phone}</p>
+                        <p className="text-xs text-gray-300">© 2024 Kenko-no-Sato Inc.</p>
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
